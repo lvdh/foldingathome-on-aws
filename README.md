@@ -51,7 +51,14 @@ make
 
 ### Configuration
 
-1. Review the [main Sceptre configuration](cfn/config/config.yaml):
+1. Accept the terms and conditions of the NVIDIA AMI
+
+     1. Log into the [AWS console](console.aws.amazon.com/).
+     2. Go to the [NVIDIA Deep Learning AMI](https://aws.amazon.com/marketplace/pp?sku=46kqvw7d9nbo0v2bfgi8z26gb) product in the AWS Marketplace.
+     3. Click *Continue to Subscribe*.
+     4. Read through the terms. If you agree, click *Accept Terms*.
+
+2. Review the [main Sceptre configuration](cfn/config/config.yaml):
 
     1. `project_code`
 
@@ -63,7 +70,7 @@ make
 
         **Note:** [Sceptre configurations may be cascaded](https://sceptre.cloudreach.com/2.3.0/docs/stack_group_config.html#stack-group-config-cascading-config) for multi-Region deployments.
 
-2. Review and update the CloudFormation [Parameters and configuration](cfn/config/).
+3. Review and update the CloudFormation [Parameters and configuration](cfn/config/).
 
 ### Manage CloudFormation Stacks
 
