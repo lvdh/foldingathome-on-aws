@@ -65,11 +65,6 @@ make
 
 2. Review and update the CloudFormation [Parameters and configuration](cfn/config/).
 
-3. Specifically, review the following settings in [cfn/config/fah/server.yaml](cfn/config/fah/server.yaml):
-
-     1. `KeypairName`: Name of an existing EC2 Key Pair
-     2. `ManagementSourceCidrIp`: CIDR IP range to whitelist for server access.
-
 ### Manage CloudFormation Stacks
 
 #### Create
