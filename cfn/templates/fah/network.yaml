@@ -1,0 +1,218 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >
+  Folding@home, Network
+
+Metadata:
+
+  AWS::CloudFormation::Interface:
+
+    ParameterGroups:
+      - Label:
+          default: Availability Zone Configuration
+        Parameters:
+          - AzCount
+      - Label:
+          default: VPC Configuration
+        Parameters:
+          - VpcCidrBlock
+
+Parameters:
+
+  AzCount:
+    Description: Number of AZs to deploy across. Different AZs may have different spot bid prices.
+    Type: Number
+    Default: 1
+    AllowedValues:
+      - 1
+      - 2
+      - 3
+
+  VpcCidrBlock:
+    Description: VPC CIDR Block
+    Type: String
+    Default: '172.31.0.0/16'
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
+    ConstraintDescription: VPC CIDR Block must be formatted as x.x.x.x/16-28
+
+Conditions:
+
+  SingleAz: !Or
+    - !Equals [1, !Ref AzCount]
+    - !Equals [2, !Ref AzCount]
+    - !Equals [3, !Ref AzCount]
+
+  DoubleAz: !Or
+    - !Equals [2, !Ref AzCount]
+    - !Equals [3, !Ref AzCount]
+
+  TripleAz: !Equals [3, !Ref AzCount]
+
+Resources:
+
+  # VPC
+
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidrBlock
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+      - Key: Name
+        Value: !Sub '${AWS::StackName}:VPC'
+
+# Internet Gateway
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}:InternetGateway'
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # Public Subnets
+
+  PublicSubnetA:
+    Condition: SingleAz
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Select [0, !Cidr [!Ref VpcCidrBlock, 6, 6]]
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+      - Key: Name
+        Value: !Sub '${AWS::StackName}:PublicSubnetA'
+
+  PublicSubnetB:
+    Condition: DoubleAz
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Select [1, !Cidr [!Ref VpcCidrBlock, 6, 6]]
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+      - Key: Name
+        Value: !Sub '${AWS::StackName}:PublicSubnetB'
+
+  PublicSubnetC:
+    Condition: TripleAz
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Select [2, !Cidr [!Ref VpcCidrBlock, 6, 6]]
+      AvailabilityZone: !Select [2, !GetAZs '']
+      Tags:
+      - Key: Name
+        Value: !Sub '${AWS::StackName}:PublicSubnetC'
+
+  # Public Subnet Routing
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+      - Key: Name
+        Value: !Sub '${AWS::StackName}:PublicRouteTable'
+
+  PublicRouteTableDefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociationA:
+    Condition: SingleAz
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetRouteTableAssociationB:
+    Condition: DoubleAz
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetB
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetRouteTableAssociationC:
+    Condition: TripleAz
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetC
+      RouteTableId: !Ref PublicRouteTable
+
+  # Public Subnet NACLs
+
+  PublicSubnetNetworkAclAssociationA:
+    Condition: SingleAz
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      NetworkAclId: !GetAtt VPC.DefaultNetworkAcl
+
+  PublicSubnetNetworkAclAssociationB:
+    Condition: DoubleAz
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetB
+      NetworkAclId: !GetAtt VPC.DefaultNetworkAcl
+
+  PublicSubnetNetworkAclAssociationC:
+    Condition: TripleAz
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetC
+      NetworkAclId: !GetAtt VPC.DefaultNetworkAcl
+
+Outputs:
+
+  Name:
+    Description: Stack Name
+    Value: !Ref AWS::StackName
+    Export:
+      Name: !Sub '${AWS::StackName}:Name'
+
+  AzCount:
+    Description: Number of AZs across which the VPC resources are deployed
+    Value: !Ref AzCount
+    Export:
+      Name: !Sub '${AWS::StackName}:AzCount'
+
+  VpcId:
+    Description: VPC ID
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${AWS::StackName}:VpcId'
+
+  VpcCidrBlock:
+    Description: VPC CIDR Block
+    Value: !Ref VpcCidrBlock
+    Export:
+      Name: !Sub '${AWS::StackName}:VpcCidrBlock'
+
+  PublicSubnetIds:
+    Description: Public Subnet IDs
+    Value: !Join
+      - ','
+      - - !If [SingleAz, !Ref PublicSubnetA, !Ref 'AWS::NoValue']
+        - !If [DoubleAz, !Ref PublicSubnetB, !Ref 'AWS::NoValue']
+        - !If [TripleAz, !Ref PublicSubnetC, !Ref 'AWS::NoValue']
+    Export:
+      Name: !Sub '${AWS::StackName}:PublicSubnetIds'
+
+  PublicRouteTableIds:
+    Description: Public Route Table IDs
+    Value: !Ref PublicRouteTable
+    Export:
+      Name: !Sub '${AWS::StackName}:PublicRouteTableIds'

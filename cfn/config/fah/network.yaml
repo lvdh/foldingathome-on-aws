@@ -1,0 +1,5 @@
+template_path: fah/network.yaml
+
+stack_tags:
+  ProjectCode: {{ project_code }}
+  Environment: 'fah'

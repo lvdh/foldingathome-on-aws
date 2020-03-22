@@ -1,0 +1,9 @@
+template_path: fah/server.yaml
+
+stack_tags:
+  ProjectCode: {{ project_code }}
+  Environment: 'fah'
+
+parameters:
+  VpcId: !stack_output fah/network.yaml::VpcId
+  SubnetIds: !stack_output fah/network.yaml::PublicSubnetIds

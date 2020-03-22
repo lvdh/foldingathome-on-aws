@@ -1,0 +1,229 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >
+  Folding@home, Servers
+
+Metadata:
+
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+    - Label:
+        default: Network Configuration
+      Parameters:
+        - AzCount
+        - VpcId
+        - SubnetIds
+    - Label:
+        default: EC2 Configuration
+      Parameters:
+        - InstanceCount
+        - InstanceType
+    - Label:
+        default: Folding@home Configuration
+      Parameters:
+        - FahTeamNumber
+        - FahUserName
+        - FahPassKey
+
+Parameters:
+
+  AzCount:
+    Description: Number of AZs to deploy across. Different AZs may have different spot bid prices.
+    Type: Number
+    Default: 1
+    AllowedValues:
+      - 1
+      - 2
+      - 3
+
+  VpcId:
+    Description: VPC ID
+    Type: AWS::EC2::VPC::Id
+
+  SubnetIds:
+    Description: Comma-delimited list of Subnet IDs
+    Type: CommaDelimitedList
+
+  InstanceCount:
+    Description: Number of instances to run the Folding@home client on
+    Type: Number
+    Default: 1
+
+  InstanceType:
+    Description: EC2 Instance Type
+    Type: String
+    Default: p3.2xlarge
+    AllowedValues:
+      - p3.2xlarge
+      - p3.8xlarge
+      - p3.16xlarge
+      - p3dn.24xlarge
+      - g4dn.xlarge
+      - g4dn.2xlarge
+      - g4dn.4xlarge
+      - g4dn.8xlarge
+      - g4dn.12xlarge
+      - g4dn.16xlarge
+
+  FahTeamNumber:
+    Description: (optional) Folding@home Team Number. See https://stats.foldingathome.org/teams
+    Type: Number
+    Default: 0
+
+  FahUserName:
+    Description: (optional) Folding@home User Name. See https://stats.foldingathome.org/donors
+    Type: String
+    Default: Anonymous
+
+  FahPassKey:
+    Description: (optional) Folding@home User Pass Key.
+    Type: String
+    Default: ''
+
+Conditions:
+
+  SingleAz: !Or
+    - !Equals [1, !Ref AzCount]
+    - !Equals [2, !Ref AzCount]
+    - !Equals [3, !Ref AzCount]
+
+  DoubleAz: !Or
+    - !Equals [2, !Ref AzCount]
+    - !Equals [3, !Ref AzCount]
+
+  TripleAz: !Equals [3, !Ref AzCount]
+
+Mappings:
+
+  RegionMap:
+    eu-west-1:
+      HVM64: 'ami-04cd74d58be218987'
+    ap-northeast-2:
+      HVM64: 'ami-09e00e986b8214201'
+    ap-northeast-1:
+      HVM64: 'ami-0f6a3208f3feec65a'
+    us-east-1:
+      HVM64: 'ami-07c95cafbb788face'
+    us-east-2:
+      HVM64: 'ami-04e6cde49c31596d5'
+    us-west-2:
+      HVM64: 'ami-06908b4e4109c2c56'
+
+Resources:
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+      MaxSize: !Ref InstanceCount
+      DesiredCapacity: !Ref InstanceCount
+      MinSize: '0'
+      VPCZoneIdentifier:
+        - !If [ SingleAz, !Select [ 0, !Ref SubnetIds ], !Ref 'AWS::NoValue' ]
+        - !If [ DoubleAz, !Select [ 1, !Ref SubnetIds ], !Ref 'AWS::NoValue' ]
+        - !If [ TripleAz, !Select [ 2, !Ref SubnetIds ], !Ref 'AWS::NoValue' ]
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}'
+          PropagateAtLaunch: True
+
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        BlockDeviceMappings:
+          - DeviceName: /dev/sda1
+            Ebs:
+              DeleteOnTermination: true
+              VolumeSize: 32 # 'NVIDIA Deep Learning AMI' default
+              VolumeType: gp2
+        IamInstanceProfile:
+          Name: !Ref InstanceProfile
+        ImageId: !FindInMap [ RegionMap, !Ref 'AWS::Region', HVM64 ]
+        InstanceType: !Ref InstanceType
+        InstanceMarketOptions:
+          MarketType: spot
+          SpotOptions:
+            SpotInstanceType: one-time
+        EbsOptimized: true
+        Monitoring:
+          Enabled: true
+        SecurityGroupIds:
+          - !Ref SecurityGroup
+        UserData:
+          Fn::Base64: !Sub |
+            #cloud-config
+            write_files:
+              - path: /etc/fahclient/config.xml
+                mode: '000600'
+                owner: root
+                group: root
+                content: |
+                <config>
+                  <user value="${FahUserName}"/>  <!-- Enter your user name here -->
+                  <team value="${FahTeamNumber}"/>  <!-- Your team number -->
+                  <passkey value="${FahPassKey}"/>  <!-- 32 hexadecimal characters if provided -->
+                  <power value="full"/>
+                  <gpu value="true"/>  <!-- If true, attempt to autoconfigure GPUs -->
+                  <fold-anon value="true"/>  <!-- Fold, even if not configured. -->
+                </config>
+            runcmd:
+              - wget https://download.foldingathome.org/releases/public/release/fahclient/debian-stable-64bit/v7.5/fahclient_7.5.1_amd64.deb
+              - dpkg -i --force-depends fahclient_7.5.1_amd64.deb
+              - /etc/init.d/FAHClient status
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+        - !Ref Role
+
+  Role:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Managed by CloudFormation'
+      VpcId: !Ref VpcId
+
+Outputs:
+
+  Name:
+    Value: !Ref AWS::StackName
+    Description: CloudFormation Stack Name
+
+  RoleName:
+    Description: Instance Role Name
+    Value: !Ref Role
+    Export:
+      Name: !Sub '${AWS::StackName}-RoleName'
+
+  RoleArn:
+    Description: Instance Role arn
+    Value: !GetAtt Role.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-RoleArn'
+
+  SecurityGroupId:
+    Description: Security Group ID of the instance's main Security Group
+    Value: !Ref SecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-SecurityGroupId'

@@ -1,0 +1,16 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+[dev-packages]
+bandit = "==1.6.2"
+cfn-lint = "==0.28.4"
+flake8 = "==3.7.9"
+yapf = "==0.29.0"
+
+[packages]
+sceptre = "==2.3.0"
+
+[requires]
+python_version = "3.7"
