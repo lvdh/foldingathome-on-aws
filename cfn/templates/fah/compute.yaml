@@ -170,11 +170,15 @@ Resources:
                   <fold-anon value="true"/>  <!-- Fold, even if not configured. -->
                 </config>
             runcmd:
+              # Install SSM Agent
               - snap install amazon-ssm-agent --classic
               - snap start amazon-ssm-agent
+              # Install Folding@home client
               - wget https://download.foldingathome.org/releases/public/release/fahclient/debian-stable-64bit/v7.5/fahclient_7.5.1_amd64.deb
               - dpkg -i --force-depends fahclient_7.5.1_amd64.deb
-              - /etc/init.d/FAHClient status
+              - /etc/init.d/FAHClient stop
+              - sleep 10 && /etc/init.d/FAHClient start
+              - sleep 10 && /etc/init.d/FAHClient status
 
   InstanceProfile:
     Type: AWS::IAM::InstanceProfile
