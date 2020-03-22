@@ -1,4 +1,4 @@
-template_path: fah/server.yaml
+template_path: fah/compute.yaml
 
 stack_tags:
   ProjectCode: {{ project_code }}
