@@ -28,7 +28,7 @@ Metadata:
 Parameters:
 
   AzCount:
-    Description: Number of AZs to deploy across. Different AZs may have different spot bid prices.
+    Description: Number of AZs to deploy across (different AZs may have different spot bid prices)
     Type: Number
     Default: 1
     AllowedValues:
@@ -65,18 +65,23 @@ Parameters:
       - g4dn.12xlarge
       - g4dn.16xlarge
 
+  MaxPrice:
+    Description: The maximum hourly price you're willing to pay for the Spot Instances (per hour, per instance)
+    Type: String
+    Default: ''
+
   FahTeamNumber:
-    Description: (optional) Folding@home Team Number. See https://stats.foldingathome.org/teams
+    Description: (optional) Folding@home Team Number (https://stats.foldingathome.org/teams)
     Type: Number
     Default: 0
 
   FahUserName:
-    Description: (optional) Folding@home User Name. See https://stats.foldingathome.org/donors
+    Description: (optional) Folding@home User Name (https://stats.foldingathome.org/donors)
     Type: String
     Default: Anonymous
 
   FahPassKey:
-    Description: (optional) Folding@home User Pass Key.
+    Description: (optional) Folding@home User Pass Key
     Type: String
     Default: ''
 
@@ -146,7 +151,7 @@ Resources:
         InstanceMarketOptions:
           MarketType: spot
           SpotOptions:
-            MaxPrice: '1.50'
+            MaxPrice: !Ref MaxPrice
             SpotInstanceType: one-time
         EbsOptimized: true
         Monitoring:
